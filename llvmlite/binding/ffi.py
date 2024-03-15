@@ -121,6 +121,12 @@ if os.name == 'nt':
     # (Windows uses PATH for DLL loading, see http://msdn.microsoft.com/en-us/library/7d83bc18.aspx).
     os.environ['PATH'] += ';' + _lib_dir
 
+def get_ld_library_path(lib_name):
+    ld_library_path = os.environ.get("LD_LIBRARY_PATH")
+    if ld_library_path:
+        join = os.path.join
+        return [join(path, lib_name) for path in ld_library_path.split(":")]
+    return []
 
 _lib_name = get_library_name()
 
@@ -129,8 +135,8 @@ _lib_name = get_library_name()
 _lib_paths = [
     os.path.join(_lib_dir, _lib_name),  # Absolute
     _lib_name,  # In PATH
-    os.path.join('.', _lib_name),  # Current directory
-]
+    os.path.join(".", _lib_name),  # Current directory
+] + get_ld_library_path(_lib_name)
 
 # If pkg_resources is available, try to use it to load the shared object.
 # This allows direct import from egg files.
