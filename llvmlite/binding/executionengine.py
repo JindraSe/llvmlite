@@ -1,25 +1,30 @@
-from __future__ import print_function, absolute_import
-
+import platform
 from ctypes import (POINTER, c_char_p, c_bool, c_void_p,
                     c_int, c_uint64, c_size_t, CFUNCTYPE, string_at, cast,
                     py_object, Structure)
-import warnings
 
-from . import ffi, targets, object_file
+from llvmlite.binding import ffi, targets, object_file
 
 
 # Just check these weren't optimized out of the DLL.
 ffi.lib.LLVMPY_LinkInMCJIT
 
 
-def create_mcjit_compiler(module, target_machine):
+def create_mcjit_compiler(module, target_machine, use_lmm=None):
     """
     Create a MCJIT ExecutionEngine from the given *module* and
     *target_machine*.
+
+    *lmm* controls whether the llvmlite memory manager is used. If not supplied,
+    the default choice for the platform will be used (``True`` on 64-bit ARM
+    systems, ``False`` otherwise).
     """
+    if use_lmm is None:
+        use_lmm = platform.machine() in ('arm64', 'aarch64')
+
     with ffi.OutputString() as outerr:
         engine = ffi.lib.LLVMPY_CreateMCJITCompiler(
-                module, target_machine, outerr)
+            module, target_machine, use_lmm, outerr)
         if not engine:
             raise RuntimeError(str(outerr))
 
@@ -74,7 +79,6 @@ class ExecutionEngine(ffi.ObjectRef):
         return ffi.lib.LLVMPY_GetGlobalValueAddress(self, name.encode("ascii"))
 
     def add_global_mapping(self, gv, addr):
-        # XXX unused?
         ffi.lib.LLVMPY_AddGlobalMapping(self, gv, addr)
 
     def add_module(self, module):
@@ -95,11 +99,16 @@ class ExecutionEngine(ffi.ObjectRef):
         ffi.lib.LLVMPY_FinalizeObject(self)
 
     def run_static_constructors(self):
-        """Run static constructors which initialize module-level static objects."""
+        """
+        Run static constructors which initialize module-level static objects.
+        """
         ffi.lib.LLVMPY_RunStaticConstructors(self)
 
     def run_static_destructors(self):
-        """Run static destructors which perform module-level cleanup of static resources."""
+        """
+        Run static destructors which perform module-level cleanup of static
+        resources.
+        """
         ffi.lib.LLVMPY_RunStaticDestructors(self)
 
     def remove_module(self, module):
@@ -152,7 +161,6 @@ class ExecutionEngine(ffi.ObjectRef):
             obj_file = object_file.ObjectFileRef.from_path(obj_file)
 
         ffi.lib.LLVMPY_MCJITAddObjectFile(self, obj_file)
-
 
     def set_object_cache(self, notify_func=None, getbuffer_func=None):
         """
@@ -238,6 +246,7 @@ class _ObjectCacheRef(ffi.ObjectRef):
 ffi.lib.LLVMPY_CreateMCJITCompiler.argtypes = [
     ffi.LLVMModuleRef,
     ffi.LLVMTargetMachineRef,
+    c_bool,
     POINTER(c_char_p),
 ]
 ffi.lib.LLVMPY_CreateMCJITCompiler.restype = ffi.LLVMExecutionEngineRef
@@ -285,12 +294,13 @@ ffi.lib.LLVMPY_MCJITAddObjectFile.argtypes = [
     ffi.LLVMObjectFileRef
 ]
 
+
 class _ObjectCacheData(Structure):
     _fields_ = [
         ('module_ptr', ffi.LLVMModuleRef),
         ('buf_ptr', c_void_p),
         ('buf_len', c_size_t),
-        ]
+    ]
 
 
 _ObjectCacheNotifyFunc = CFUNCTYPE(None, py_object,
@@ -299,9 +309,12 @@ _ObjectCacheGetBufferFunc = CFUNCTYPE(None, py_object,
                                       POINTER(_ObjectCacheData))
 
 # XXX The ctypes function wrappers are created at the top-level, otherwise
-# there are issues when creating CFUNCTYPEs in child processes on CentOS 5 32 bits.
-_notify_c_hook = _ObjectCacheNotifyFunc(ExecutionEngine._raw_object_cache_notify)
-_getbuffer_c_hook = _ObjectCacheGetBufferFunc(ExecutionEngine._raw_object_cache_getbuffer)
+# there are issues when creating CFUNCTYPEs in child processes on CentOS 5
+# 32 bits.
+_notify_c_hook = _ObjectCacheNotifyFunc(
+    ExecutionEngine._raw_object_cache_notify)
+_getbuffer_c_hook = _ObjectCacheGetBufferFunc(
+    ExecutionEngine._raw_object_cache_getbuffer)
 
 ffi.lib.LLVMPY_CreateObjectCache.argtypes = [_ObjectCacheNotifyFunc,
                                              _ObjectCacheGetBufferFunc,

@@ -1,11 +1,14 @@
-from __future__ import print_function, absolute_import
-
 import os
 from ctypes import (POINTER, c_char_p, c_longlong, c_int, c_size_t,
                     c_void_p, string_at)
 
-from . import ffi
-from .common import _decode_string, _encode_string
+from llvmlite.binding import ffi
+from llvmlite.binding.initfini import llvm_version_info
+from llvmlite.binding.common import _decode_string, _encode_string
+from collections import namedtuple
+
+Triple = namedtuple('Triple', ['Arch', 'SubArch', 'Vendor',
+                               'OS', 'Env', 'ObjectFormat'])
 
 
 def get_process_triple():
@@ -20,11 +23,31 @@ def get_process_triple():
         return str(out)
 
 
+def get_triple_parts(triple: str):
+    """
+    Return a tuple of the parts of the given triple.
+    """
+    with ffi.OutputString() as arch, \
+            ffi.OutputString() as vendor, \
+            ffi.OutputString() as os, ffi.OutputString() as env:
+        ffi.lib.LLVMPY_GetTripleParts(triple.encode('utf8'),
+                                      arch, vendor, os, env)
+        arch = str(arch)
+        subarch = ''
+        for _str in triple.split('-'):
+            if _str.startswith(arch):
+                subarch = _str[len(arch):]
+                break
+        return Triple(arch, subarch, str(vendor), str(os),
+                      str(env), get_object_format(triple))
+
+
 class FeatureMap(dict):
     """
     Maps feature name to a boolean indicating the availability of the feature.
     Extends ``dict`` to add `.flatten()` method.
     """
+
     def flatten(self, sort=True):
         """
         Args
@@ -59,7 +82,7 @@ def get_host_cpu_features():
     with ffi.OutputString() as out:
         outdict = FeatureMap()
         if not ffi.lib.LLVMPY_GetHostCPUFeatures(out):
-            raise RuntimeError("failed to get host cpu features.")
+            return outdict
         flag_map = {'+': True, '-': False}
         content = str(out)
         if content:  # protect against empty string
@@ -77,6 +100,7 @@ def get_default_triple():
         ffi.lib.LLVMPY_GetDefaultTargetTriple(out)
         return str(out)
 
+
 def get_host_cpu_name():
     """
     Get the name of the host's CPU, suitable for using with
@@ -86,11 +110,34 @@ def get_host_cpu_name():
         ffi.lib.LLVMPY_GetHostCPUName(out)
         return str(out)
 
-_object_formats = {
-    1: "COFF",
-    2: "ELF",
-    3: "MachO",
+
+# Adapted from https://github.com/llvm/llvm-project/blob/release/15.x/llvm/include/llvm/ADT/Triple.h#L269 # noqa
+llvm_version_major = llvm_version_info[0]
+
+
+if llvm_version_major >= 15:
+    _object_formats = {
+        0: "Unknown",
+        1: "COFF",
+        2: "DXContainer",
+        3: "ELF",
+        4: "GOFF",
+        5: "MachO",
+        6: "SPIRV",
+        7: "Wasm",
+        8: "XCOFF",
     }
+else:
+    _object_formats = {
+        0: "Unknown",
+        1: "COFF",
+        2: "ELF",
+        3: "GOFF",
+        4: "MachO",
+        5: "Wasm",
+        6: "XCOFF",
+    }
+
 
 def get_object_format(triple=None):
     """
@@ -141,27 +188,15 @@ class TargetData(ffi.ObjectRef):
         offset = ffi.lib.LLVMPY_OffsetOfElement(self, ty, position)
         if offset == -1:
             raise ValueError("Could not determined offset of {}th "
-                    "element of the type '{}'. Is it a struct type?".format(
-                    position, str(ty)))
+                             "element of the type '{}'. Is it a struct"
+                             "type?".format(position, str(ty)))
         return offset
 
-    def get_pointee_abi_size(self, ty):
+    def get_abi_alignment(self, ty):
         """
-        Get ABI size of pointee type of LLVM pointer type *ty*.
+        Get minimum ABI alignment of LLVM type *ty*.
         """
-        size = ffi.lib.LLVMPY_ABISizeOfElementType(self, ty)
-        if size == -1:
-            raise RuntimeError("Not a pointer type: %s" % (ty,))
-        return size
-
-    def get_pointee_abi_alignment(self, ty):
-        """
-        Get minimum ABI alignment of pointee type of LLVM pointer type *ty*.
-        """
-        size = ffi.lib.LLVMPY_ABIAlignmentOfElementType(self, ty)
-        if size == -1:
-            raise RuntimeError("Not a pointer type: %s" % (ty,))
-        return size
+        return ffi.lib.LLVMPY_ABIAlignmentOfType(self, ty)
 
 
 RELOC = frozenset(['default', 'static', 'pic', 'dynamicnopic'])
@@ -216,13 +251,21 @@ class Target(ffi.ObjectRef):
 
     def create_target_machine(self, cpu='', features='',
                               opt=2, reloc='default', codemodel='jitdefault',
-                              jitdebug=False, printmc=False):
+                              printmc=False, jit=False, abiname=''):
         """
         Create a new TargetMachine for this target and the given options.
 
         Specifying codemodel='default' will result in the use of the "small"
         code model. Specifying codemodel='jitdefault' will result in the code
         model being picked based on platform bitness (32="small", 64="large").
+
+        The `printmc` option corresponds to llvm's `-print-machineinstrs`.
+
+        The `jit` option should be set when the target-machine is to be used
+        in a JIT engine.
+
+        The `abiname` option specifies the ABI. RISC-V targets with hard-float
+        needs to pass the ABI name to LLVM.
         """
         assert 0 <= opt <= 3
         assert reloc in RELOC
@@ -240,9 +283,10 @@ class Target(ffi.ObjectRef):
                                                 opt,
                                                 _encode_string(reloc),
                                                 _encode_string(codemodel),
-                                                int(jitdebug),
                                                 int(printmc),
-        )
+                                                int(jit),
+                                                _encode_string(abiname),
+                                                )
         if tm:
             return TargetMachine(tm)
         else:
@@ -314,6 +358,7 @@ class TargetMachine(ffi.ObjectRef):
             ffi.lib.LLVMPY_GetTargetMachineTriple(self, out)
             return str(out)
 
+
 def has_svml():
     """
     Returns True if SVML was enabled at FFI support compile time.
@@ -328,6 +373,9 @@ def has_svml():
 # FFI
 
 ffi.lib.LLVMPY_GetProcessTriple.argtypes = [POINTER(c_char_p)]
+ffi.lib.LLVMPY_GetTripleParts.argtypes = [c_char_p, POINTER(c_char_p),
+                                          POINTER(c_char_p), POINTER(c_char_p),
+                                          POINTER(c_char_p)]
 
 ffi.lib.LLVMPY_GetHostCPUFeatures.argtypes = [POINTER(c_char_p)]
 ffi.lib.LLVMPY_GetHostCPUFeatures.restype = c_int
@@ -360,13 +408,9 @@ ffi.lib.LLVMPY_OffsetOfElement.argtypes = [ffi.LLVMTargetDataRef,
                                            c_int]
 ffi.lib.LLVMPY_OffsetOfElement.restype = c_longlong
 
-ffi.lib.LLVMPY_ABISizeOfElementType.argtypes = [ffi.LLVMTargetDataRef,
-                                                ffi.LLVMTypeRef]
-ffi.lib.LLVMPY_ABISizeOfElementType.restype = c_longlong
-
-ffi.lib.LLVMPY_ABIAlignmentOfElementType.argtypes = [ffi.LLVMTargetDataRef,
-                                                     ffi.LLVMTypeRef]
-ffi.lib.LLVMPY_ABIAlignmentOfElementType.restype = c_longlong
+ffi.lib.LLVMPY_ABIAlignmentOfType.argtypes = [ffi.LLVMTargetDataRef,
+                                              ffi.LLVMTypeRef]
+ffi.lib.LLVMPY_ABIAlignmentOfType.restype = c_longlong
 
 ffi.lib.LLVMPY_GetTargetFromTriple.argtypes = [c_char_p, POINTER(c_char_p)]
 ffi.lib.LLVMPY_GetTargetFromTriple.restype = ffi.LLVMTargetRef
@@ -391,6 +435,12 @@ ffi.lib.LLVMPY_CreateTargetMachine.argtypes = [
     c_char_p,
     # CodeModel
     c_char_p,
+    # PrintMC
+    c_int,
+    # JIT
+    c_int,
+    # ABIName
+    c_char_p,
 ]
 ffi.lib.LLVMPY_CreateTargetMachine.restype = ffi.LLVMTargetMachineRef
 
@@ -399,8 +449,8 @@ ffi.lib.LLVMPY_DisposeTargetMachine.argtypes = [ffi.LLVMTargetMachineRef]
 ffi.lib.LLVMPY_GetTargetMachineTriple.argtypes = [ffi.LLVMTargetMachineRef,
                                                   POINTER(c_char_p)]
 
-ffi.lib.LLVMPY_SetTargetMachineAsmVerbosity.argtypes = [ffi.LLVMTargetMachineRef,
-                                                        c_int]
+ffi.lib.LLVMPY_SetTargetMachineAsmVerbosity.argtypes = [
+    ffi.LLVMTargetMachineRef, c_int]
 
 ffi.lib.LLVMPY_AddAnalysisPasses.argtypes = [
     ffi.LLVMTargetMachineRef,

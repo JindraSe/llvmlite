@@ -1,12 +1,11 @@
-from __future__ import print_function, absolute_import
 from ctypes import (c_char_p, byref, POINTER, c_bool, create_string_buffer,
                     c_size_t, string_at)
 
-from . import ffi
-from .linker import link_modules
-from .common import _decode_string, _encode_string
-from .value import ValueRef, TypeRef
-from .context import get_global_context
+from llvmlite.binding import ffi
+from llvmlite.binding.linker import link_modules
+from llvmlite.binding.common import _decode_string, _encode_string
+from llvmlite.binding.value import ValueRef, TypeRef
+from llvmlite.binding.context import get_global_context
 
 
 def parse_assembly(llvmir, context=None):
@@ -147,6 +146,13 @@ class ModuleRef(ffi.ObjectRef):
     @name.setter
     def name(self, value):
         ffi.lib.LLVMPY_SetModuleName(self, _encode_string(value))
+
+    @property
+    def source_file(self):
+        """
+        The module's original source file name
+        """
+        return _decode_string(ffi.lib.LLVMPY_GetModuleSourceFileName(self))
 
     @property
     def data_layout(self):
@@ -376,4 +382,5 @@ ffi.lib.LLVMPY_ParseDbgDeclareVar.restype = c_char_p
 ffi.lib.LLVMPY_ParseDbgDeclareType.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_ParseDbgDeclareType.restype = c_char_p
 
-
+ffi.lib.LLVMPY_GetModuleSourceFileName.argtypes = [ffi.LLVMModuleRef]
+ffi.lib.LLVMPY_GetModuleSourceFileName.restype = c_char_p

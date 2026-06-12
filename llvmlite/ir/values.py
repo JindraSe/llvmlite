@@ -3,15 +3,14 @@ Classes that are LLVM values: Value, Constant...
 Instructions are in the instructions module.
 """
 
-from __future__ import print_function, absolute_import
-
+import functools
 import string
 import re
+from types import MappingProxyType
 
-from .. import six
-from . import types, _utils
-from ._utils import _StrCaching, _StringReferenceCaching, _HasMetadata
-
+from llvmlite.ir import values, types, _utils
+from llvmlite.ir._utils import (_StrCaching, _StringReferenceCaching,
+                                _HasMetadata)
 
 _VALID_CHARS = (frozenset(map(ord, string.ascii_letters)) |
                 frozenset(map(ord, string.digits)) |
@@ -19,13 +18,23 @@ _VALID_CHARS = (frozenset(map(ord, string.ascii_letters)) |
 
 _SIMPLE_IDENTIFIER_RE = re.compile(r"[-a-zA-Z$._][-a-zA-Z$._0-9]*$")
 
+_CMP_MAP = {
+    '>': 'gt',
+    '<': 'lt',
+    '==': 'eq',
+    '!=': 'ne',
+    '>=': 'ge',
+    '<=': 'le',
+}
+
 
 def _escape_string(text, _map={}):
     """
     Escape the given bytestring for safe use as a LLVM array constant.
+    Any unicode string input is first encoded with utf8 into bytes.
     """
     if isinstance(text, str):
-        text = text.encode('ascii')
+        text = text.encode()
     assert isinstance(text, (bytes, bytearray))
 
     if not _map:
@@ -34,11 +43,42 @@ def _escape_string(text, _map={}):
                 _map[ch] = chr(ch)
             else:
                 _map[ch] = '\\%02x' % ch
-            if six.PY2:
-                _map[chr(ch)] = _map[ch]
 
     buf = [_map[ch] for ch in text]
     return ''.join(buf)
+
+
+def _binop(opname):
+    def wrap(fn):
+        @functools.wraps(fn)
+        def wrapped(lhs, rhs):
+            if lhs.type != rhs.type:
+                raise ValueError("Operands must be the same type, got (%s, %s)"
+                                 % (lhs.type, rhs.type))
+
+            fmt = "{0} ({1} {2}, {3} {4})".format(opname,
+                                                  lhs.type, lhs.get_reference(),
+                                                  rhs.type, rhs.get_reference())
+            return FormattedConstant(lhs.type, fmt)
+
+        return wrapped
+    return wrap
+
+
+def _castop(opname):
+    def wrap(fn):
+        @functools.wraps(fn)
+        def wrapped(self, typ):
+            fn(self, typ)
+            if typ == self.type:
+                return self
+
+            op = "{0} ({1} {2} to {3})".format(opname, self.type,
+                                               self.get_reference(), typ)
+            return FormattedConstant(typ, op)
+
+        return wrapped
+    return wrap
 
 
 class _ConstOpMixin(object):
@@ -46,31 +86,312 @@ class _ConstOpMixin(object):
     A mixin defining constant operations, for use in constant-like classes.
     """
 
+    #
+    # Arithmetic APIs
+    #
+
+    @_binop('shl')
+    def shl(self, other):
+        """
+        Left integer shift:
+            lhs << rhs
+        """
+
+    @_binop('lshr')
+    def lshr(self, other):
+        """
+        Logical (unsigned) right integer shift:
+            lhs >> rhs
+        """
+
+    @_binop('ashr')
+    def ashr(self, other):
+        """
+        Arithmetic (signed) right integer shift:
+            lhs >> rhs
+        """
+
+    @_binop('add')
+    def add(self, other):
+        """
+        Integer addition:
+            lhs + rhs
+        """
+
+    @_binop('fadd')
+    def fadd(self, other):
+        """
+        Floating-point addition:
+            lhs + rhs
+        """
+
+    @_binop('sub')
+    def sub(self, other):
+        """
+        Integer subtraction:
+            lhs - rhs
+        """
+
+    @_binop('fsub')
+    def fsub(self, other):
+        """
+        Floating-point subtraction:
+            lhs - rhs
+        """
+
+    @_binop('mul')
+    def mul(self, other):
+        """
+        Integer multiplication:
+            lhs * rhs
+        """
+
+    @_binop('fmul')
+    def fmul(self, other):
+        """
+        Floating-point multiplication:
+            lhs * rhs
+        """
+
+    @_binop('udiv')
+    def udiv(self, other):
+        """
+        Unsigned integer division:
+            lhs / rhs
+        """
+
+    @_binop('sdiv')
+    def sdiv(self, other):
+        """
+        Signed integer division:
+            lhs / rhs
+        """
+
+    @_binop('fdiv')
+    def fdiv(self, other):
+        """
+        Floating-point division:
+            lhs / rhs
+        """
+
+    @_binop('urem')
+    def urem(self, other):
+        """
+        Unsigned integer remainder:
+            lhs % rhs
+        """
+
+    @_binop('srem')
+    def srem(self, other):
+        """
+        Signed integer remainder:
+            lhs % rhs
+        """
+
+    @_binop('frem')
+    def frem(self, other):
+        """
+        Floating-point remainder:
+            lhs % rhs
+        """
+
+    @_binop('or')
+    def or_(self, other):
+        """
+        Bitwise integer OR:
+            lhs | rhs
+        """
+
+    @_binop('and')
+    def and_(self, other):
+        """
+        Bitwise integer AND:
+            lhs & rhs
+        """
+
+    @_binop('xor')
+    def xor(self, other):
+        """
+        Bitwise integer XOR:
+            lhs ^ rhs
+        """
+
+    def _cmp(self, prefix, sign, cmpop, other):
+        ins = prefix + 'cmp'
+        try:
+            op = _CMP_MAP[cmpop]
+        except KeyError:
+            raise ValueError("invalid comparison %r for %s" % (cmpop, ins))
+
+        if not (prefix == 'i' and cmpop in ('==', '!=')):
+            op = sign + op
+
+        if self.type != other.type:
+            raise ValueError("Operands must be the same type, got (%s, %s)"
+                             % (self.type, other.type))
+
+        fmt = "{0} {1} ({2} {3}, {4} {5})".format(
+            ins, op,
+            self.type, self.get_reference(),
+            other.type, other.get_reference())
+
+        return FormattedConstant(types.IntType(1), fmt)
+
+    def icmp_signed(self, cmpop, other):
+        """
+        Signed integer comparison:
+            lhs <cmpop> rhs
+
+        where cmpop can be '==', '!=', '<', '<=', '>', '>='
+        """
+        return self._cmp('i', 's', cmpop, other)
+
+    def icmp_unsigned(self, cmpop, other):
+        """
+        Unsigned integer (or pointer) comparison:
+            lhs <cmpop> rhs
+
+        where cmpop can be '==', '!=', '<', '<=', '>', '>='
+        """
+        return self._cmp('i', 'u', cmpop, other)
+
+    def fcmp_ordered(self, cmpop, other):
+        """
+        Floating-point ordered comparison:
+            lhs <cmpop> rhs
+
+        where cmpop can be '==', '!=', '<', '<=', '>', '>=', 'ord', 'uno'
+        """
+        return self._cmp('f', 'o', cmpop, other)
+
+    def fcmp_unordered(self, cmpop, other):
+        """
+        Floating-point unordered comparison:
+            lhs <cmpop> rhs
+
+        where cmpop can be '==', '!=', '<', '<=', '>', '>=', 'ord', 'uno'
+        """
+        return self._cmp('f', 'u', cmpop, other)
+
+    #
+    # Unary APIs
+    #
+
+    def not_(self):
+        """
+        Bitwise integer complement:
+            ~value
+        """
+        if isinstance(self.type, types.VectorType):
+            rhs = values.Constant(self.type, (-1,) * self.type.count)
+        else:
+            rhs = values.Constant(self.type, -1)
+
+        return self.xor(rhs)
+
+    def neg(self):
+        """
+        Integer negative:
+            -value
+        """
+        zero = values.Constant(self.type, 0)
+        return zero.sub(self)
+
+    def fneg(self):
+        """
+        Floating-point negative:
+            -value
+        """
+        fmt = "fneg ({0} {1})".format(self.type, self.get_reference())
+        return FormattedConstant(self.type, fmt)
+
+    #
+    # Cast APIs
+    #
+
+    @_castop('trunc')
+    def trunc(self, typ):
+        """
+        Truncating integer downcast to a smaller type.
+        """
+
+    @_castop('zext')
+    def zext(self, typ):
+        """
+        Zero-extending integer upcast to a larger type
+        """
+
+    @_castop('sext')
+    def sext(self, typ):
+        """
+        Sign-extending integer upcast to a larger type.
+        """
+
+    @_castop('fptrunc')
+    def fptrunc(self, typ):
+        """
+        Floating-point downcast to a less precise type.
+        """
+
+    @_castop('fpext')
+    def fpext(self, typ):
+        """
+        Floating-point upcast to a more precise type.
+        """
+
+    @_castop('bitcast')
     def bitcast(self, typ):
         """
-        Bitcast this pointer constant to the given type.
+        Pointer cast to a different pointer type.
         """
-        if typ == self.type:
-            return self
-        op = "bitcast ({0} {1} to {2})".format(self.type, self.get_reference(),
-                                               typ)
-        return FormattedConstant(typ, op)
 
+    @_castop('fptoui')
+    def fptoui(self, typ):
+        """
+        Convert floating-point to unsigned integer.
+        """
+
+    @_castop('uitofp')
+    def uitofp(self, typ):
+        """
+        Convert unsigned integer to floating-point.
+        """
+
+    @_castop('fptosi')
+    def fptosi(self, typ):
+        """
+        Convert floating-point to signed integer.
+        """
+
+    @_castop('sitofp')
+    def sitofp(self, typ):
+        """
+        Convert signed integer to floating-point.
+        """
+
+    @_castop('ptrtoint')
+    def ptrtoint(self, typ):
+        """
+        Cast pointer to integer.
+        """
+        if not isinstance(self.type, types.PointerType):
+            msg = "can only call ptrtoint() on pointer type, not '%s'"
+            raise TypeError(msg % (self.type,))
+        if not isinstance(typ, types.IntType):
+            raise TypeError("can only ptrtoint() to integer type, not '%s'"
+                            % (typ,))
+
+    @_castop('inttoptr')
     def inttoptr(self, typ):
         """
-        Cast this integer constant to the given pointer type.
+        Cast integer to pointer.
         """
         if not isinstance(self.type, types.IntType):
-            raise TypeError("can only call inttoptr() on integer constants, not '%s'"
-                            % (self.type,))
+            msg = "can only call inttoptr() on integer constants, not '%s'"
+            raise TypeError(msg % (self.type,))
         if not isinstance(typ, types.PointerType):
             raise TypeError("can only inttoptr() to pointer type, not '%s'"
                             % (typ,))
-
-        op = "inttoptr ({0} {1} to {2})".format(self.type,
-                                                self.get_reference(),
-                                                typ)
-        return FormattedConstant(typ, op)
 
     def gep(self, indices):
         """
@@ -161,12 +482,12 @@ class Constant(_StrCaching, _StringReferenceCaching, _ConstOpMixin, Value):
         return cls(types.ArrayType(ty, len(elems)), elems)
 
     @classmethod
-    def literal_struct(cls, elems):
+    def literal_struct(cls, elems, packed=False):
         """
         Construct a literal structure constant made of the given members.
         """
         tys = [el.type for el in elems]
-        return cls(types.LiteralStructType(tys), elems)
+        return cls(types.LiteralStructType(tys, packed), elems)
 
     @property
     def addrspace(self):
@@ -222,7 +543,7 @@ class NamedValue(_StrCaching, _StringReferenceCaching, Value):
 
     def _to_string(self):
         buf = []
-        if self.type != types.VoidType():
+        if not isinstance(self.type, types.VoidType):
             buf.append("{0} = ".format(self.get_reference()))
         self.descr(buf)
         return "".join(buf).rstrip()
@@ -234,7 +555,8 @@ class NamedValue(_StrCaching, _StringReferenceCaching, Value):
         return self._name
 
     def _set_name(self, name):
-        name = self.parent.scope.register(name, deduplicate=self.deduplicate_name)
+        name = self.parent.scope.register(name,
+                                          deduplicate=self.deduplicate_name)
         self._name = name
 
     name = property(_get_name, _set_name)
@@ -351,7 +673,7 @@ class MDValue(NamedValue):
         operands = []
         for op in self.operands:
             if isinstance(op.type, types.MetaDataType):
-                if isinstance(op, Constant) and op.constant == None:
+                if isinstance(op, Constant) and op.constant is None:
                     operands.append("null")
                 else:
                     operands.append(op.get_reference())
@@ -383,6 +705,7 @@ class DIToken:
 
     Use this to wrap known constants, e.g. the DW_* enumerations.
     """
+
     def __init__(self, value):
         self.value = value
 
@@ -419,7 +742,7 @@ class DIValue(NamedValue):
                 strvalue = value.value
             elif isinstance(value, str):
                 strvalue = '"{}"'.format(_escape_string(value))
-            elif isinstance(value, six.integer_types):
+            elif isinstance(value, int):
                 strvalue = str(value)
             elif isinstance(value, NamedValue):
                 strvalue = value.get_reference()
@@ -448,7 +771,7 @@ class DIValue(NamedValue):
         return hash((self.is_distinct, self.kind, self.operands))
 
 
-class GlobalValue(NamedValue, _ConstOpMixin):
+class GlobalValue(NamedValue, _ConstOpMixin, _HasMetadata):
     """
     A global value.
     """
@@ -459,6 +782,8 @@ class GlobalValue(NamedValue, _ConstOpMixin):
         super(GlobalValue, self).__init__(*args, **kwargs)
         self.linkage = ''
         self.storage_class = ''
+        self.section = ''
+        self.metadata = {}
 
 
 class GlobalVariable(GlobalValue):
@@ -511,8 +836,14 @@ class GlobalVariable(GlobalValue):
             # emit 'undef' for non-external linkage GV
             buf.append(" " + self.value_type(Undefined).get_reference())
 
+        if self.section:
+            buf.append(", section \"%s\"" % (self.section,))
+
         if self.align is not None:
             buf.append(", align %d" % (self.align,))
+
+        if self.metadata:
+            buf.append(self._stringify_metadata(leading_comma=True))
 
         buf.append("\n")
 
@@ -527,24 +858,27 @@ class AttributeSet(set):
     _known = ()
 
     def __init__(self, args=()):
+        super().__init__()
         if isinstance(args, str):
             args = [args]
         for name in args:
             self.add(name)
+
+    def _expand(self, name, typ):
+        return name
 
     def add(self, name):
         if name not in self._known:
             raise ValueError('unknown attr {!r} for {}'.format(name, self))
         return super(AttributeSet, self).add(name)
 
-    def __iter__(self):
-        # In sorted order
-        return iter(sorted(super(AttributeSet, self).__iter__()))
+    def _to_list(self, typ):
+        return [self._expand(i, typ) for i in sorted(self)]
 
 
 class FunctionAttributes(AttributeSet):
     _known = frozenset([
-        'argmemonly', 'alwaysinline', 'builtin', 'cold',
+        'argmemonly', 'alwaysinline', 'builtin', 'cold', 'convergent',
         'inaccessiblememonly', 'inaccessiblemem_or_argmemonly', 'inlinehint',
         'jumptable', 'minsize', 'naked', 'nobuiltin', 'noduplicate',
         'noimplicitfloat', 'noinline', 'nonlazybind', 'norecurse',
@@ -557,6 +891,13 @@ class FunctionAttributes(AttributeSet):
         self._alignstack = 0
         self._personality = None
         super(FunctionAttributes, self).__init__(args)
+
+    def add(self, name):
+        if ((name == 'alwaysinline' and 'noinline' in self) or
+                (name == 'noinline' and 'alwaysinline' in self)):
+            raise ValueError("Can't have alwaysinline and noinline")
+
+        super().add(name)
 
     @property
     def alignstack(self):
@@ -576,21 +917,22 @@ class FunctionAttributes(AttributeSet):
         assert val is None or isinstance(val, GlobalValue)
         self._personality = val
 
-    def __repr__(self):
-        attrs = list(self)
+    def _to_list(self, ret_type):
+        attrs = super()._to_list(ret_type)
         if self.alignstack:
             attrs.append('alignstack({0:d})'.format(self.alignstack))
         if self.personality:
             attrs.append('personality {persty} {persfn}'.format(
-                            persty=self.personality.type,
-                            persfn=self.personality.get_reference()))
-        return ' '.join(attrs)
+                persty=self.personality.type,
+                persfn=self.personality.get_reference()))
+        return attrs
 
 
-class Function(GlobalValue, _HasMetadata):
+class Function(GlobalValue):
     """Represent a LLVM Function but does uses a Module as parent.
     Global Values are stored as a set of dependencies (attribute `depends`).
     """
+
     def __init__(self, module, ftype, name):
         assert isinstance(ftype, types.Type)
         super(Function, self).__init__(module, ftype.as_pointer(), name=name)
@@ -603,7 +945,6 @@ class Function(GlobalValue, _HasMetadata):
         self.return_value = ReturnValue(self, ftype.return_type)
         self.parent.add_global(self)
         self.calling_convention = ''
-        self.metadata = {}
 
     @property
     def module(self):
@@ -637,7 +978,8 @@ class Function(GlobalValue, _HasMetadata):
         ret = self.return_value
         args = ", ".join(str(a) for a in self.args)
         name = self.get_reference()
-        attrs = self.attributes
+        attrs = ' ' + ' '.join(self.attributes._to_list(
+            self.ftype.return_type)) if self.attributes else ''
         if any(self.args):
             vararg = ', ...' if self.ftype.var_arg else ''
         else:
@@ -646,9 +988,12 @@ class Function(GlobalValue, _HasMetadata):
         cconv = self.calling_convention
         prefix = " ".join(str(x) for x in [state, linkage, cconv, ret] if x)
         metadata = self._stringify_metadata()
-        prototype = "{prefix} {name}({args}{vararg}) {attrs}{metadata}\n".format(
-            prefix=prefix, name=name, args=args, vararg=vararg,
-            attrs=attrs, metadata=metadata)
+        metadata = ' {}'.format(metadata) if metadata else ''
+        section = ' section "{}"'.format(self.section) if self.section else ''
+        pt_str = "{prefix} {name}({args}{vararg}){attrs}{section}{metadata}\n"
+        prototype = pt_str.format(prefix=prefix, name=name, args=args,
+                                  vararg=vararg, attrs=attrs, section=section,
+                                  metadata=metadata)
         buf.append(prototype)
 
     def descr_body(self, buf):
@@ -676,9 +1021,32 @@ class Function(GlobalValue, _HasMetadata):
 
 
 class ArgumentAttributes(AttributeSet):
-    _known = frozenset(['byval', 'inalloca', 'inreg', 'nest', 'noalias',
-                        'nocapture', 'nonnull', 'returned', 'signext',
-                        'sret', 'zeroext'])
+    # List from
+    # https://releases.llvm.org/14.0.0/docs/LangRef.html#parameter-attributes
+    _known = MappingProxyType({
+        # True (emit type),
+        # False (emit name only)
+        'byref': True,
+        'byval': True,
+        'elementtype': True,
+        'immarg': False,
+        'inalloca': True,
+        'inreg': False,
+        'nest': False,
+        'noalias': False,
+        'nocapture': False,
+        'nofree': False,
+        'nonnull': False,
+        'noundef': False,
+        'preallocated': True,
+        'returned': False,
+        'signext': False,
+        'sret': True,
+        'swiftasync': False,
+        'swifterror': False,
+        'swiftself': False,
+        'zeroext': False,
+    })
 
     def __init__(self, args=()):
         self._align = 0
@@ -686,13 +1054,20 @@ class ArgumentAttributes(AttributeSet):
         self._dereferenceable_or_null = 0
         super(ArgumentAttributes, self).__init__(args)
 
+    def _expand(self, name, typ):
+        requires_type = self._known.get(name)
+        if requires_type:
+            return f"{name}({typ.pointee})"
+        else:
+            return name
+
     @property
     def align(self):
         return self._align
 
     @align.setter
     def align(self, val):
-        assert isinstance(val, six.integer_types) and val >= 0
+        assert isinstance(val, int) and val >= 0
         self._align = val
 
     @property
@@ -701,7 +1076,7 @@ class ArgumentAttributes(AttributeSet):
 
     @dereferenceable.setter
     def dereferenceable(self, val):
-        assert isinstance(val, six.integer_types) and val >= 0
+        assert isinstance(val, int) and val >= 0
         self._dereferenceable = val
 
     @property
@@ -710,17 +1085,18 @@ class ArgumentAttributes(AttributeSet):
 
     @dereferenceable_or_null.setter
     def dereferenceable_or_null(self, val):
-        assert isinstance(val, six.integer_types) and val >= 0
+        assert isinstance(val, int) and val >= 0
         self._dereferenceable_or_null = val
 
-    def _to_list(self):
-        attrs = sorted(self)
+    def _to_list(self, typ):
+        attrs = super()._to_list(typ)
         if self.align:
             attrs.append('align {0:d}'.format(self.align))
         if self.dereferenceable:
             attrs.append('dereferenceable({0:d})'.format(self.dereferenceable))
         if self.dereferenceable_or_null:
-            attrs.append('dereferenceable_or_null({0:d})'.format(self.dereferenceable_or_null))
+            dref = 'dereferenceable_or_null({0:d})'
+            attrs.append(dref.format(self.dereferenceable_or_null))
         return attrs
 
 
@@ -732,7 +1108,8 @@ class _BaseArgument(NamedValue):
         self.attributes = ArgumentAttributes()
 
     def __repr__(self):
-        return "<ir.%s %r of type %s>" % (self.__class__.__name__, self.name, self.type)
+        return "<ir.%s %r of type %s>" % (self.__class__.__name__, self.name,
+                                          self.type)
 
     def add_attribute(self, attr):
         self.attributes.add(attr)
@@ -744,7 +1121,7 @@ class Argument(_BaseArgument):
     """
 
     def __str__(self):
-        attrs = self.attributes._to_list()
+        attrs = self.attributes._to_list(self.type)
         if attrs:
             return "{0} {1} {2}".format(self.type, ' '.join(attrs),
                                         self.get_reference())
@@ -758,7 +1135,7 @@ class ReturnValue(_BaseArgument):
     """
 
     def __str__(self):
-        attrs = self.attributes._to_list()
+        attrs = self.attributes._to_list(self.type)
         if attrs:
             return "{0} {1}".format(' '.join(attrs), self.type)
         else:
@@ -807,9 +1184,9 @@ class Block(NamedValue):
         for bb in self.parent.basic_blocks:
             for instr in bb.instructions:
                 instr.replace_usage(old, new)
-    
+
     def _format_name(self):
-        # Per the LLVM Language Ref on identifiers, names matching the following 
+        # Per the LLVM Language Ref on identifiers, names matching the following
         # regex do not need to be quoted: [%@][-a-zA-Z$._][-a-zA-Z$._0-9]*
         # Otherwise, the identifier must be quoted and escaped.
         name = self.name
@@ -817,7 +1194,6 @@ class Block(NamedValue):
             name = name.replace('\\', '\\5c').replace('"', '\\22')
             name = '"{0}"'.format(name)
         return name
-
 
 
 class BlockAddress(Value):
@@ -837,5 +1213,5 @@ class BlockAddress(Value):
 
     def get_reference(self):
         return "blockaddress({0}, {1})".format(
-                    self.function.get_reference(),
-                    self.basic_block.get_reference())
+            self.function.get_reference(),
+            self.basic_block.get_reference())

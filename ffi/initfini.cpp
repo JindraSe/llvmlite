@@ -7,15 +7,17 @@
 
 extern "C" {
 
-
-#define INIT(F) \
-    API_EXPORT(void) LLVMPY_Initialize ## F() { \
-            LLVMInitialize ## F (LLVMGetGlobalPassRegistry()); }
+#define INIT(F)                                                                \
+    API_EXPORT(void) LLVMPY_Initialize##F() {                                  \
+        LLVMInitialize##F(LLVMGetGlobalPassRegistry());                        \
+    }
 
 INIT(Core)
 INIT(TransformUtils)
 INIT(ScalarOpts)
+#if LLVM_VERSION_MAJOR < 16
 INIT(ObjCARCOpts)
+#endif
 INIT(Vectorization)
 INIT(InstCombine)
 INIT(IPO)
@@ -28,12 +30,11 @@ INIT(Target)
 #undef INIT
 
 API_EXPORT(void)
-LLVMPY_Shutdown(){
-    LLVMShutdown();
-}
+LLVMPY_Shutdown() { LLVMShutdown(); }
 
 // Target Initialization
-#define INIT(F) API_EXPORT(void) LLVMPY_Initialize ## F() { LLVMInitialize ## F (); }
+#define INIT(F)                                                                \
+    API_EXPORT(void) LLVMPY_Initialize##F() { LLVMInitialize##F(); }
 
 // NOTE: it is important that we don't export functions which we don't use,
 // especially those which may pull in large amounts of additional code or data.
@@ -50,8 +51,7 @@ INIT(NativeAsmPrinter)
 #undef INIT
 
 API_EXPORT(unsigned int)
-LLVMPY_GetVersionInfo()
-{
+LLVMPY_GetVersionInfo() {
     unsigned int verinfo = 0;
     verinfo += LLVM_VERSION_MAJOR << 16;
     verinfo += LLVM_VERSION_MINOR << 8;

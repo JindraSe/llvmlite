@@ -84,6 +84,11 @@ Classes
         Get the ABI-mandated size of a :class:`TypeRef` object.
         Returns an integer.
 
+   * .. method:: get_abi_alignment(type)
+
+        Similar to :meth:`get_abi_size`, but returns the ABI-mandated alignment
+        rather that the ABI size.
+
    * .. method:: get_pointee_abi_size(type)
 
         Similar to :meth:`get_abi_size`, but assumes that *type* is
@@ -135,7 +140,8 @@ Classes
         EXAMPLE: ``"x86_64-pc-linux-gnu"``
 
    * .. method:: create_target_machine(cpu='', features='', \
-          opt=2, reloc='default', codemodel='jitdefault')
+          opt=2, reloc='default', codemodel='jitdefault', \
+          abiname='')
 
         Create a new :class:`TargetMachine` instance for this
         target and with the given options:
@@ -146,6 +152,7 @@ Classes
         * *opt* is the optimization level, from 0 to 3.
         * *reloc* is the relocation model.
         * *codemodel* is the code model.
+        * *abiname* is the name of the ABI.
 
         The defaults for reloc and codemodel are appropriate for
         JIT compilation.

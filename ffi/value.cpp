@@ -1,12 +1,13 @@
-#include <string>
-#include "llvm-c/Core.h"
 #include "core.h"
+#include "llvm-c/Core.h"
+#include <string>
 
 #include <iostream>
 
 // the following is needed for WriteGraph()
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/Support/GraphWriter.h"
 
 /* An iterator around a attribute list, including the stop condition */
 struct AttributeListIterator {
@@ -15,12 +16,11 @@ struct AttributeListIterator {
     const_iterator end;
 
     AttributeListIterator(const_iterator cur, const_iterator end)
-        :cur(cur), end(end)
-    { }
+        : cur(cur), end(end) {}
 };
 
 struct OpaqueAttributeListIterator;
-typedef OpaqueAttributeListIterator* LLVMAttributeListIteratorRef;
+typedef OpaqueAttributeListIterator *LLVMAttributeListIteratorRef;
 
 /* An iterator around a attribute set, including the stop condition */
 struct AttributeSetIterator {
@@ -29,12 +29,11 @@ struct AttributeSetIterator {
     const_iterator end;
 
     AttributeSetIterator(const_iterator cur, const_iterator end)
-        :cur(cur), end(end)
-    { }
+        : cur(cur), end(end) {}
 };
 
 struct OpaqueAttributeSetIterator;
-typedef OpaqueAttributeSetIterator* LLVMAttributeSetIteratorRef;
+typedef OpaqueAttributeSetIterator *LLVMAttributeSetIteratorRef;
 
 /* An iterator around a function's blocks, including the stop condition */
 struct BlocksIterator {
@@ -43,12 +42,11 @@ struct BlocksIterator {
     const_iterator end;
 
     BlocksIterator(const_iterator cur, const_iterator end)
-        :cur(cur), end(end)
-    { }
+        : cur(cur), end(end) {}
 };
 
 struct OpaqueBlocksIterator;
-typedef OpaqueBlocksIterator* LLVMBlocksIteratorRef;
+typedef OpaqueBlocksIterator *LLVMBlocksIteratorRef;
 
 /* An iterator around a function's arguments, including the stop condition */
 struct ArgumentsIterator {
@@ -57,27 +55,25 @@ struct ArgumentsIterator {
     const_iterator end;
 
     ArgumentsIterator(const_iterator cur, const_iterator end)
-        :cur(cur), end(end)
-    { }
+        : cur(cur), end(end) {}
 };
 
 struct OpaqueArgumentsIterator;
-typedef OpaqueArgumentsIterator* LLVMArgumentsIteratorRef;
+typedef OpaqueArgumentsIterator *LLVMArgumentsIteratorRef;
 
-
-/* An iterator around a basic block's instructions, including the stop condition */
+/* An iterator around a basic block's instructions, including the stop condition
+ */
 struct InstructionsIterator {
     typedef llvm::BasicBlock::const_iterator const_iterator;
     const_iterator cur;
     const_iterator end;
 
     InstructionsIterator(const_iterator cur, const_iterator end)
-        :cur(cur), end(end)
-    { }
+        : cur(cur), end(end) {}
 };
 
 struct OpaqueInstructionsIterator;
-typedef OpaqueInstructionsIterator* LLVMInstructionsIteratorRef;
+typedef OpaqueInstructionsIterator *LLVMInstructionsIteratorRef;
 
 /* An iterator around a instruction's operands, including the stop condition */
 struct OperandsIterator {
@@ -86,277 +82,273 @@ struct OperandsIterator {
     const_iterator end;
 
     OperandsIterator(const_iterator cur, const_iterator end)
-        :cur(cur), end(end)
-    { }
+        : cur(cur), end(end) {}
 };
 
 struct OpaqueOperandsIterator;
-typedef OpaqueOperandsIterator* LLVMOperandsIteratorRef;
+typedef OpaqueOperandsIterator *LLVMOperandsIteratorRef;
+
+/* An iterator around a phi node's incoming blocks, including the stop condition
+ */
+struct IncomingBlocksIterator {
+    typedef llvm::PHINode::const_block_iterator const_iterator;
+    const_iterator cur;
+    const_iterator end;
+
+    IncomingBlocksIterator(const_iterator cur, const_iterator end)
+        : cur(cur), end(end) {}
+};
+
+struct OpaqueIncomingBlocksIterator;
+typedef OpaqueIncomingBlocksIterator *LLVMIncomingBlocksIteratorRef;
 
 namespace llvm {
 
-static LLVMAttributeListIteratorRef
-wrap(AttributeListIterator* GI){
+static LLVMAttributeListIteratorRef wrap(AttributeListIterator *GI) {
     return reinterpret_cast<LLVMAttributeListIteratorRef>(GI);
 }
 
-static AttributeListIterator*
-unwrap(LLVMAttributeListIteratorRef GI){
+static AttributeListIterator *unwrap(LLVMAttributeListIteratorRef GI) {
     return reinterpret_cast<AttributeListIterator *>(GI);
 }
 
-static LLVMAttributeSetIteratorRef
-wrap(AttributeSetIterator* GI){
+static LLVMAttributeSetIteratorRef wrap(AttributeSetIterator *GI) {
     return reinterpret_cast<LLVMAttributeSetIteratorRef>(GI);
 }
 
-static AttributeSetIterator*
-unwrap(LLVMAttributeSetIteratorRef GI){
+static AttributeSetIterator *unwrap(LLVMAttributeSetIteratorRef GI) {
     return reinterpret_cast<AttributeSetIterator *>(GI);
 }
 
-static LLVMBlocksIteratorRef
-wrap(BlocksIterator* GI){
+static LLVMBlocksIteratorRef wrap(BlocksIterator *GI) {
     return reinterpret_cast<LLVMBlocksIteratorRef>(GI);
 }
 
-static BlocksIterator*
-unwrap(LLVMBlocksIteratorRef GI){
+static BlocksIterator *unwrap(LLVMBlocksIteratorRef GI) {
     return reinterpret_cast<BlocksIterator *>(GI);
 }
 
-static LLVMArgumentsIteratorRef
-wrap(ArgumentsIterator* GI){
+static LLVMArgumentsIteratorRef wrap(ArgumentsIterator *GI) {
     return reinterpret_cast<LLVMArgumentsIteratorRef>(GI);
 }
 
-static ArgumentsIterator*
-unwrap(LLVMArgumentsIteratorRef GI){
+static ArgumentsIterator *unwrap(LLVMArgumentsIteratorRef GI) {
     return reinterpret_cast<ArgumentsIterator *>(GI);
 }
 
-static LLVMInstructionsIteratorRef
-wrap(InstructionsIterator* GI){
+static LLVMInstructionsIteratorRef wrap(InstructionsIterator *GI) {
     return reinterpret_cast<LLVMInstructionsIteratorRef>(GI);
 }
 
-static InstructionsIterator*
-unwrap(LLVMInstructionsIteratorRef GI){
+static InstructionsIterator *unwrap(LLVMInstructionsIteratorRef GI) {
     return reinterpret_cast<InstructionsIterator *>(GI);
 }
 
-static LLVMOperandsIteratorRef
-wrap(OperandsIterator* GI){
+static LLVMOperandsIteratorRef wrap(OperandsIterator *GI) {
     return reinterpret_cast<LLVMOperandsIteratorRef>(GI);
 }
 
-static OperandsIterator*
-unwrap(LLVMOperandsIteratorRef GI){
+static OperandsIterator *unwrap(LLVMOperandsIteratorRef GI) {
     return reinterpret_cast<OperandsIterator *>(GI);
 }
 
-
+static LLVMIncomingBlocksIteratorRef wrap(IncomingBlocksIterator *GI) {
+    return reinterpret_cast<LLVMIncomingBlocksIteratorRef>(GI);
 }
+
+static IncomingBlocksIterator *unwrap(LLVMIncomingBlocksIteratorRef GI) {
+    return reinterpret_cast<IncomingBlocksIterator *>(GI);
+}
+
+} // namespace llvm
 
 extern "C" {
 
 API_EXPORT(LLVMAttributeListIteratorRef)
-LLVMPY_FunctionAttributesIter(LLVMValueRef F)
-{
+LLVMPY_FunctionAttributesIter(LLVMValueRef F) {
     using namespace llvm;
-    Function* func = unwrap<Function>(F);
+    Function *func = unwrap<Function>(F);
     AttributeList attrs = func->getAttributes();
-    return wrap(new AttributeListIterator(attrs.begin(),
-                                          attrs.end()));
+    return wrap(new AttributeListIterator(attrs.begin(), attrs.end()));
 }
 
 API_EXPORT(LLVMAttributeSetIteratorRef)
-LLVMPY_ArgumentAttributesIter(LLVMValueRef A)
-{
+LLVMPY_ArgumentAttributesIter(LLVMValueRef A) {
     using namespace llvm;
-    Argument* arg = unwrap<Argument>(A);
+    Argument *arg = unwrap<Argument>(A);
     unsigned argno = arg->getArgNo();
-    AttributeSet attrs = arg->getParent()
-#if LLVM_VERSION_MAJOR >= 14
-      ->getAttributes().getParamAttrs(argno);
-#else
-      ->getAttributes().getParamAttributes(argno);
-#endif
-    return wrap(new AttributeSetIterator(attrs.begin(),
-                                         attrs.end()));
+    const AttributeSet attrs =
+        arg->getParent()->getAttributes().getParamAttrs(argno);
+    return wrap(new AttributeSetIterator(attrs.begin(), attrs.end()));
 }
 
 API_EXPORT(LLVMAttributeListIteratorRef)
-LLVMPY_CallInstAttributesIter(LLVMValueRef C)
-{
+LLVMPY_CallInstAttributesIter(LLVMValueRef C) {
     using namespace llvm;
-    CallInst* inst = unwrap<CallInst>(C);
+    CallInst *inst = unwrap<CallInst>(C);
     AttributeList attrs = inst->getAttributes();
-    return wrap(new AttributeListIterator(attrs.begin(),
-                                          attrs.end()));
+    return wrap(new AttributeListIterator(attrs.begin(), attrs.end()));
 }
 
 API_EXPORT(LLVMAttributeListIteratorRef)
-LLVMPY_InvokeInstAttributesIter(LLVMValueRef C)
-{
+LLVMPY_InvokeInstAttributesIter(LLVMValueRef C) {
     using namespace llvm;
-    InvokeInst* inst = unwrap<InvokeInst>(C);
+    InvokeInst *inst = unwrap<InvokeInst>(C);
     AttributeList attrs = inst->getAttributes();
-    return wrap(new AttributeListIterator(attrs.begin(),
-                                          attrs.end()));
+    return wrap(new AttributeListIterator(attrs.begin(), attrs.end()));
 }
 
 API_EXPORT(LLVMAttributeSetIteratorRef)
-LLVMPY_GlobalAttributesIter(LLVMValueRef G)
-{
+LLVMPY_GlobalAttributesIter(LLVMValueRef G) {
     using namespace llvm;
-    GlobalVariable* g = unwrap<GlobalVariable>(G);
+    GlobalVariable *g = unwrap<GlobalVariable>(G);
     AttributeSet attrs = g->getAttributes();
-    return wrap(new AttributeSetIterator(attrs.begin(),
-                                         attrs.end()));
+    return wrap(new AttributeSetIterator(attrs.begin(), attrs.end()));
 }
 
 API_EXPORT(LLVMBlocksIteratorRef)
-LLVMPY_FunctionBlocksIter(LLVMValueRef F)
-{
+LLVMPY_FunctionBlocksIter(LLVMValueRef F) {
     using namespace llvm;
-    Function* func = unwrap<Function>(F);
-    return wrap(new BlocksIterator(func->begin(),
-                                   func->end()));
+    Function *func = unwrap<Function>(F);
+    return wrap(new BlocksIterator(func->begin(), func->end()));
 }
 
 API_EXPORT(LLVMArgumentsIteratorRef)
-LLVMPY_FunctionArgumentsIter(LLVMValueRef F)
-{
+LLVMPY_FunctionArgumentsIter(LLVMValueRef F) {
     using namespace llvm;
-    Function* func = unwrap<Function>(F);
-    return wrap(new ArgumentsIterator(func->arg_begin(),
-                                      func->arg_end()));
+    Function *func = unwrap<Function>(F);
+    return wrap(new ArgumentsIterator(func->arg_begin(), func->arg_end()));
 }
 
 API_EXPORT(LLVMInstructionsIteratorRef)
-LLVMPY_BlockInstructionsIter(LLVMValueRef B)
-{
+LLVMPY_BlockInstructionsIter(LLVMValueRef B) {
     using namespace llvm;
-    BasicBlock* block = unwrap<BasicBlock>(B);
-    return wrap(new InstructionsIterator(block->begin(),
-                                         block->end()));
+    BasicBlock *block = unwrap<BasicBlock>(B);
+    return wrap(new InstructionsIterator(block->begin(), block->end()));
 }
 
 API_EXPORT(LLVMOperandsIteratorRef)
-LLVMPY_InstructionOperandsIter(LLVMValueRef I)
-{
+LLVMPY_InstructionOperandsIter(LLVMValueRef I) {
     using namespace llvm;
-    Instruction* inst = unwrap<Instruction>(I);
-    return wrap(new OperandsIterator(inst->op_begin(),
-                                inst->op_end()));
+    Instruction *inst = unwrap<Instruction>(I);
+    return wrap(new OperandsIterator(inst->op_begin(), inst->op_end()));
+}
+
+API_EXPORT(LLVMIncomingBlocksIteratorRef)
+LLVMPY_PhiIncomingBlocksIter(LLVMValueRef I) {
+    using namespace llvm;
+    PHINode *inst = unwrap<PHINode>(I);
+    return wrap(
+        new IncomingBlocksIterator(inst->block_begin(), inst->block_end()));
 }
 
 API_EXPORT(const char *)
-LLVMPY_AttributeListIterNext(LLVMAttributeListIteratorRef GI)
-{
+LLVMPY_AttributeListIterNext(LLVMAttributeListIteratorRef GI) {
     using namespace llvm;
-    AttributeListIterator* iter = unwrap(GI);
+    AttributeListIterator *iter = unwrap(GI);
     if (iter->cur != iter->end) {
         return LLVMPY_CreateString((&*iter->cur++)->getAsString().c_str());
     } else {
-      return NULL;
+        return NULL;
     }
 }
 
 API_EXPORT(const char *)
-LLVMPY_AttributeSetIterNext(LLVMAttributeSetIteratorRef GI)
-{
+LLVMPY_AttributeSetIterNext(LLVMAttributeSetIteratorRef GI) {
     using namespace llvm;
-    AttributeSetIterator* iter = unwrap(GI);
+    AttributeSetIterator *iter = unwrap(GI);
     if (iter->cur != iter->end) {
         return LLVMPY_CreateString((&*iter->cur++)->getAsString().c_str());
     } else {
-      return NULL;
+        return NULL;
     }
 }
 
 API_EXPORT(LLVMValueRef)
-LLVMPY_BlocksIterNext(LLVMBlocksIteratorRef GI)
-{
+LLVMPY_BlocksIterNext(LLVMBlocksIteratorRef GI) {
     using namespace llvm;
-    BlocksIterator* iter = unwrap(GI);
+    BlocksIterator *iter = unwrap(GI);
     if (iter->cur != iter->end) {
-      return wrap(static_cast<const Value*>(&*iter->cur++));
+        return wrap(static_cast<const Value *>(&*iter->cur++));
     } else {
-      return NULL;
+        return NULL;
     }
 }
 
 API_EXPORT(LLVMValueRef)
-LLVMPY_ArgumentsIterNext(LLVMArgumentsIteratorRef GI)
-{
+LLVMPY_ArgumentsIterNext(LLVMArgumentsIteratorRef GI) {
     using namespace llvm;
-    ArgumentsIterator* iter = unwrap(GI);
+    ArgumentsIterator *iter = unwrap(GI);
     if (iter->cur != iter->end) {
-      return wrap(&*iter->cur++);
+        return wrap(&*iter->cur++);
     } else {
-      return NULL;
+        return NULL;
     }
 }
 
 API_EXPORT(LLVMValueRef)
-LLVMPY_InstructionsIterNext(LLVMInstructionsIteratorRef GI)
-{
+LLVMPY_InstructionsIterNext(LLVMInstructionsIteratorRef GI) {
     using namespace llvm;
-    InstructionsIterator* iter = unwrap(GI);
+    InstructionsIterator *iter = unwrap(GI);
     if (iter->cur != iter->end) {
-      return wrap(&*iter->cur++);
+        return wrap(&*iter->cur++);
     } else {
-      return NULL;
+        return NULL;
     }
 }
 
 API_EXPORT(LLVMValueRef)
-LLVMPY_OperandsIterNext(LLVMOperandsIteratorRef GI)
-{
+LLVMPY_OperandsIterNext(LLVMOperandsIteratorRef GI) {
     using namespace llvm;
-    OperandsIterator* iter = unwrap(GI);
+    OperandsIterator *iter = unwrap(GI);
     if (iter->cur != iter->end) {
-      return wrap((&*iter->cur++)->get());
+        return wrap((&*iter->cur++)->get());
     } else {
-      return NULL;
+        return NULL;
+    }
+}
+
+API_EXPORT(LLVMValueRef)
+LLVMPY_IncomingBlocksIterNext(LLVMIncomingBlocksIteratorRef GI) {
+    using namespace llvm;
+    IncomingBlocksIterator *iter = unwrap(GI);
+    if (iter->cur != iter->end) {
+        return wrap(static_cast<const Value *>(*iter->cur++));
+    } else {
+        return NULL;
     }
 }
 
 API_EXPORT(void)
-LLVMPY_DisposeAttributeListIter(LLVMAttributeListIteratorRef GI)
-{
+LLVMPY_DisposeAttributeListIter(LLVMAttributeListIteratorRef GI) {
     delete llvm::unwrap(GI);
 }
 
 API_EXPORT(void)
-LLVMPY_DisposeAttributeSetIter(LLVMAttributeSetIteratorRef GI)
-{
+LLVMPY_DisposeAttributeSetIter(LLVMAttributeSetIteratorRef GI) {
     delete llvm::unwrap(GI);
 }
 
 API_EXPORT(void)
-LLVMPY_DisposeBlocksIter(LLVMBlocksIteratorRef GI)
-{
+LLVMPY_DisposeBlocksIter(LLVMBlocksIteratorRef GI) { delete llvm::unwrap(GI); }
+
+API_EXPORT(void)
+LLVMPY_DisposeArgumentsIter(LLVMArgumentsIteratorRef GI) {
     delete llvm::unwrap(GI);
 }
 
 API_EXPORT(void)
-LLVMPY_DisposeArgumentsIter(LLVMArgumentsIteratorRef GI)
-{
+LLVMPY_DisposeInstructionsIter(LLVMInstructionsIteratorRef GI) {
     delete llvm::unwrap(GI);
 }
 
 API_EXPORT(void)
-LLVMPY_DisposeInstructionsIter(LLVMInstructionsIteratorRef GI)
-{
+LLVMPY_DisposeOperandsIter(LLVMOperandsIteratorRef GI) {
     delete llvm::unwrap(GI);
 }
 
 API_EXPORT(void)
-LLVMPY_DisposeOperandsIter(LLVMOperandsIteratorRef GI)
-{
+LLVMPY_DisposeIncomingBlocksIter(LLVMIncomingBlocksIteratorRef GI) {
     delete llvm::unwrap(GI);
 }
 
@@ -458,10 +450,7 @@ LLVMPY_GetTypeName(LLVMTypeRef type)
 }
 
 API_EXPORT(bool)
-LLVMPY_TypeIsPointer(LLVMTypeRef type)
-{
-    return llvm::unwrap(type)->isPointerTy();
-}
+LLVMPY_IsConstant(LLVMValueRef Val) { return LLVMIsConstant(Val); }
 
 API_EXPORT(bool)
 LLVMPY_TypeIsArray(LLVMTypeRef type)
@@ -485,10 +474,8 @@ API_EXPORT(LLVMTypeRef)
 LLVMPY_GetElementType(LLVMTypeRef type)
 {
     llvm::Type* unwrapped = llvm::unwrap(type);
-    if (auto* ty = llvm::dyn_cast<llvm::PointerType>(unwrapped)) {
-        return llvm::wrap(ty->getElementType());
-    }
-
+    // Note: PointerType no longer carries an element type with opaque
+    // pointers (LLVM >= 16), so only array/vector types are handled here.
     if (auto* ty = llvm::dyn_cast<llvm::ArrayType>(unwrapped)) {
         return llvm::wrap(ty->getElementType());
     }
@@ -521,53 +508,79 @@ LLVMPY_GetStructElementType(LLVMTypeRef type, unsigned n)
     return nullptr;
 }
 
+API_EXPORT(const uint64_t *)
+LLVMPY_GetConstantIntRawValue(LLVMValueRef Val, bool *littleEndian) {
+    if (littleEndian) {
+        *littleEndian = llvm::sys::IsLittleEndianHost;
+    }
+    if (llvm::ConstantInt *CI =
+            llvm::dyn_cast<llvm::ConstantInt>((llvm::Value *)Val)) {
+        return CI->getValue().getRawData();
+    }
+    return nullptr;
+}
+
+API_EXPORT(unsigned)
+LLVMPY_GetConstantIntNumWords(LLVMValueRef Val) {
+    if (llvm::ConstantInt *CI =
+            llvm::dyn_cast<llvm::ConstantInt>((llvm::Value *)Val)) {
+        return CI->getValue().getNumWords();
+    }
+    return 0;
+}
+
+API_EXPORT(double)
+LLVMPY_GetConstantFPValue(LLVMValueRef Val, bool *losesInfo) {
+    LLVMBool losesInfo_internal;
+    double result = LLVMConstRealGetDouble(Val, &losesInfo_internal);
+    if (losesInfo) {
+        *losesInfo = losesInfo_internal;
+    }
+    return result;
+}
+
+API_EXPORT(int)
+LLVMPY_GetValueKind(LLVMValueRef Val) { return (int)LLVMGetValueKind(Val); }
+
+API_EXPORT(LLVMTypeRef)
+LLVMPY_GlobalGetValueType(LLVMValueRef GlobalVal) {
+    return LLVMGlobalGetValueType(GlobalVal);
+}
 
 API_EXPORT(void)
-LLVMPY_SetLinkage(LLVMValueRef Val, int Linkage)
-{
+LLVMPY_SetLinkage(LLVMValueRef Val, int Linkage) {
     LLVMSetLinkage(Val, (LLVMLinkage)Linkage);
 }
 
 API_EXPORT(int)
-LLVMPY_GetLinkage(LLVMValueRef Val)
-{
-    return (int)LLVMGetLinkage(Val);
-}
+LLVMPY_GetLinkage(LLVMValueRef Val) { return (int)LLVMGetLinkage(Val); }
 
 API_EXPORT(void)
-LLVMPY_SetVisibility(LLVMValueRef Val, int Visibility)
-{
+LLVMPY_SetVisibility(LLVMValueRef Val, int Visibility) {
     LLVMSetVisibility(Val, (LLVMVisibility)Visibility);
 }
 
 API_EXPORT(int)
-LLVMPY_GetVisibility(LLVMValueRef Val)
-{
-    return (int)LLVMGetVisibility(Val);
-}
+LLVMPY_GetVisibility(LLVMValueRef Val) { return (int)LLVMGetVisibility(Val); }
 
 API_EXPORT(void)
-LLVMPY_SetDLLStorageClass(LLVMValueRef Val, int DLLStorageClass)
-{
+LLVMPY_SetDLLStorageClass(LLVMValueRef Val, int DLLStorageClass) {
     LLVMSetDLLStorageClass(Val, (LLVMDLLStorageClass)DLLStorageClass);
 }
 
 API_EXPORT(int)
-LLVMPY_GetDLLStorageClass(LLVMValueRef Val)
-{
+LLVMPY_GetDLLStorageClass(LLVMValueRef Val) {
     return (int)LLVMGetDLLStorageClass(Val);
 }
 
 API_EXPORT(unsigned)
-LLVMPY_GetEnumAttributeKindForName(const char *name, size_t len)
-{
+LLVMPY_GetEnumAttributeKindForName(const char *name, size_t len) {
     /* zero is returned if no match */
     return LLVMGetEnumAttributeKindForName(name, len);
 }
 
 API_EXPORT(void)
-LLVMPY_AddFunctionAttr(LLVMValueRef Fn, unsigned AttrKind)
-{
+LLVMPY_AddFunctionAttr(LLVMValueRef Fn, unsigned AttrKind) {
     LLVMContextRef ctx = LLVMGetModuleContext(LLVMGetGlobalParent(Fn));
     LLVMAttributeRef attr_ref = LLVMCreateEnumAttribute(ctx, AttrKind, 0);
     LLVMAddAttributeAtIndex(Fn, LLVMAttributeReturnIndex, attr_ref);
@@ -578,14 +591,6 @@ LLVMPY_IsDeclaration(LLVMValueRef GV)
 {
     return LLVMIsDeclaration(GV);
 }
-
-API_EXPORT(int)
-LLVMPY_IsConstant(LLVMValueRef V)
-{
-    using namespace llvm;
-    return isa<Constant>(unwrap<Value>(V));
-}
-
 
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
@@ -639,28 +644,24 @@ LLVMPY_PhiGetIncomingBlock(LLVMValueRef P, unsigned Idx)
 API_EXPORT(void)
 LLVMPY_WriteCFG(LLVMValueRef Fval, const char **OutStr, int ShowInst) {
     using namespace llvm;
-    Function *F  = unwrap<Function>(Fval);
+    Function *F = unwrap<Function>(Fval);
     std::string buffer;
     raw_string_ostream stream(buffer);
-    // Note: The (const Function*)F is necessary to trigger the right behavior.
-    //       A non constant Function* will result in the instruction not
-    //       printed regardless of the value in the 3rd argument.
-    WriteGraph(stream, (const Function*)F, !ShowInst);
+    DOTFuncInfo CFGInfo(F, nullptr, nullptr, 0);
+    WriteGraph(stream, &CFGInfo, !ShowInst);
     *OutStr = LLVMPY_CreateString(stream.str().c_str());
 }
 
 API_EXPORT(const char *)
-LLVMPY_GetOpcodeName(LLVMValueRef Val)
-{
+LLVMPY_GetOpcodeName(LLVMValueRef Val) {
     // try to convert to an instruction value, works for other derived
     // types too
-    llvm::Value* unwrapped = llvm::unwrap(Val);
-    llvm::Instruction* inst = llvm::dyn_cast<llvm::Instruction>(unwrapped);
+    llvm::Value *unwrapped = llvm::unwrap(Val);
+    llvm::Instruction *inst = llvm::dyn_cast<llvm::Instruction>(unwrapped);
     if (inst) {
         return LLVMPY_CreateString(inst->getOpcodeName());
     }
     return LLVMPY_CreateString("");
 }
-
 
 } // end extern "C"

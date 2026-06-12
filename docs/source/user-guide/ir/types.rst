@@ -38,10 +38,16 @@ instantiated, a type should be considered immutable.
         to the *target_data*---an
         :class:`llvmlite.binding.TargetData` instance.
 
-        NOTE: :meth:`get_abi_size` and :meth:`get_abi_alignment`
-        call into the LLVM C++ API to get the requested
-        information.
+   * .. method:: get_element_offset(target_data, position)
 
+        Get the byte offset for the struct element at *position*,
+        according to the *target_data*---an
+        :class:`llvmlite.binding.TargetData` instance.
+
+        NOTE: :meth:`get_abi_size`, :meth:`get_abi_alignment`,
+        and :meth:`get_element_offset` call into the LLVM C++
+        API to get the requested information.
+        
    * .. method:: __call__(value)
 
         A convenience method to create a :class:`Constant` of
@@ -57,6 +63,51 @@ instantiated, a type should be considered immutable.
 
 Atomic types
 =============
+
+
+.. class:: IntType(bits)
+
+   The type of integers. The Python integer *bits* specifies the
+   bitwidth of the integers having this type.
+
+   .. attribute:: width
+
+      The width in bits.
+
+.. class:: HalfType()
+
+   The type of half-precision, floating-point, real numbers.
+
+
+.. class:: FloatType()
+
+   The type of single-precision, floating-point, real numbers.
+
+
+.. class:: DoubleType()
+
+   The type of double-precision, floating-point, real numbers.
+
+
+.. class:: VoidType()
+
+   The class for void types. Used only as the return type of a
+   function without a return value.
+
+
+.. _pointer-types:
+
+Pointer Types
+=============
+
+The IR layer presently supports both *Typed Pointers* and *Opaque Pointers*.
+Support for Typed Pointers will eventually be removed.
+
+.. note::
+   Further details of the migration to Opaque Pointers are outlined in the
+   section on :ref:`deprecation-of-typed-pointers`.
+
+Typed Pointers are created using:
 
 .. class:: PointerType(pointee, addrspace=0)
 
@@ -74,40 +125,38 @@ Atomic types
 
         The type pointed to.
 
+Printing of Typed Pointers as Opaque Pointers can be enabled by setting the
+environment variable:
 
-.. class:: IntType(bits)
+.. code:: bash
 
-   The type of integers. The Python integer *bits* specifies the
-   bitwidth of the integers having this type.
+   LLVMLITE_ENABLE_IR_LAYER_TYPED_POINTERS=0
 
-   .. attribute:: width
+or by setting the ``ir_layer_typed_pointers_enabled`` attribute after importing
+llvmlite, but prior to using any of its functionality. For example:
 
-      The width in bits.
+.. code:: python
 
-.. class:: HalfType()
+   import llvmlite
+   llvmlite.ir_layer_typed_pointers_enabled = False
 
-   The type of half-precision, floating-point, real numbers.
+   # ... continue using llvmlite ...
 
-   NOTE: On Python 3.5 and earlier, constants won't be rounded
-   to valid fp16 numbers, and so may generate invalid IR. In this
-   case, use rounding code like ``float(np.float16(1.12312321e-2))``
-   before calling :class:`IRBuilder` methods.
+Opaque Pointers can be created by using:
 
+.. class:: PointerType(addrspace=0)
+   :no-index:
 
-.. class:: FloatType()
+   The type of pointers.
 
-   The type of single-precision, floating-point, real numbers.
+   Pointer types expose the following attribute:
 
+   * .. attribute:: addrspace
+        :no-index:
 
-.. class:: DoubleType()
-
-   The type of double-precision, floating-point, real numbers.
-
-
-.. class:: VoidType()
-
-   The class for void types. Used only as the return type of a
-   function without a return value.
+        The pointer's address space number. This optional integer
+        allows you to choose a non-default address space---the
+        meaning is platform dependent.
 
 
 .. _aggregate-types:

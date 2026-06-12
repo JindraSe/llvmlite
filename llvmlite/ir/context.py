@@ -1,6 +1,5 @@
-from __future__ import print_function, absolute_import
-from . import _utils
-from . import types
+from llvmlite.ir import _utils
+from llvmlite.ir import types
 
 
 class Context(object):
@@ -8,10 +7,10 @@ class Context(object):
         self.scope = _utils.NameScope()
         self.identified_types = {}
 
-    def get_identified_type(self, name):
+    def get_identified_type(self, name, packed=False):
         if name not in self.identified_types:
             self.scope.register(name)
-            ty = types.IdentifiedStructType(self, name)
+            ty = types.IdentifiedStructType(self, name, packed)
             self.identified_types[name] = ty
         else:
             ty = self.identified_types[name]
