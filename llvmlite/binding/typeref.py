@@ -109,15 +109,17 @@ class TypeRef(ffi.ObjectRef):
             raise ValueError("Type {} doesn't contain elements.".format(self))
         return _TypeListIterator(ffi.lib.LLVMPY_ElementIter(self))
 
-    # FIXME: Remove me once typed pointers support is removed.
     @property
     def element_type(self):
         """
-        Returns the pointed-to type. When the type is not a pointer,
-        raises exception.
+        Returns the element type of an array or vector type. When the
+        type is neither an array nor a vector, raises exception.
+
+        Note: pointer types no longer carry an element type with opaque
+        pointers (LLVM >= 16).
         """
-        if not self.is_pointer:
-            raise ValueError("Type {} is not a pointer".format(self))
+        if not self.is_array and not self.is_vector:
+            raise ValueError("Type {} is not an array nor vector".format(self))
         return TypeRef(ffi.lib.LLVMPY_GetElementType(self))
 
     @property
@@ -266,6 +268,9 @@ ffi.lib.LLVMPY_IsOpaqueStruct.restype = c_bool
 
 ffi.lib.LLVMPY_IsLiteralStruct.argtypes = [ffi.LLVMTypeRef]
 ffi.lib.LLVMPY_IsLiteralStruct.restype = c_bool
+
+ffi.lib.LLVMPY_GetElementType.argtypes = [ffi.LLVMTypeRef]
+ffi.lib.LLVMPY_GetElementType.restype = ffi.LLVMTypeRef
 
 ffi.lib.LLVMPY_GetStructNumElements.argtypes = [ffi.LLVMTypeRef]
 ffi.lib.LLVMPY_GetStructNumElements.restype = c_uint

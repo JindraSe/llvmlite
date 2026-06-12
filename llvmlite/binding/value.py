@@ -249,6 +249,24 @@ class ValueRef(ffi.ObjectRef):
         return TypeRef(ffi.lib.LLVMPY_GlobalGetValueType(self))
 
     @property
+    def allocated_type(self):
+        """
+        The type allocated by this ``alloca`` instruction.
+        Needed for opaque pointers (LLVM >= 16), since the pointer type
+        itself no longer carries an element type.
+        """
+        return TypeRef(ffi.lib.LLVMPY_GetAllocatedType(self))
+
+    @property
+    def gep_source_element_type(self):
+        """
+        The source element type of this ``getelementptr`` instruction.
+        Needed for opaque pointers (LLVM >= 16), since the pointer type
+        itself no longer carries an element type.
+        """
+        return TypeRef(ffi.lib.LLVMPY_GetGEPSourceElementType(self))
+
+    @property
     def is_declaration(self):
         """
         Whether this value (presumably global) is defined in the current
@@ -730,3 +748,9 @@ ffi.lib.LLVMPY_GetConstantIntNumWords.restype = c_uint
 ffi.lib.LLVMPY_GetConstantFPValue.argtypes = [ffi.LLVMValueRef,
                                               POINTER(c_bool)]
 ffi.lib.LLVMPY_GetConstantFPValue.restype = c_double
+
+ffi.lib.LLVMPY_GetAllocatedType.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetAllocatedType.restype = ffi.LLVMTypeRef
+
+ffi.lib.LLVMPY_GetGEPSourceElementType.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetGEPSourceElementType.restype = ffi.LLVMTypeRef

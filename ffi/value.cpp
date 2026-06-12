@@ -421,54 +421,8 @@ LLVMPY_GetGlobalParent(LLVMValueRef Val)
     return LLVMGetGlobalParent(Val);
 }
 
-API_EXPORT(LLVMTypeRef)
-LLVMPY_TypeOf(LLVMValueRef Val)
-{
-    return LLVMTypeOf(Val);
-}
-
-API_EXPORT(const char *)
-LLVMPY_PrintType(LLVMTypeRef type)
-{
-    char *str = LLVMPrintTypeToString(type);
-    const char *out = LLVMPY_CreateString(str);
-    LLVMDisposeMessage(str);
-    return out;
-}
-
-API_EXPORT(const char *)
-LLVMPY_GetTypeName(LLVMTypeRef type)
-{
-    // try to convert to a struct type, works for other derived
-    // types too
-    llvm::Type* unwrapped = llvm::unwrap(type);
-    llvm::StructType* ty = llvm::dyn_cast<llvm::StructType>(unwrapped);
-    if (ty && !ty->isLiteral()) {
-        return LLVMPY_CreateString(ty->getStructName().str().c_str());
-    }
-    return LLVMPY_CreateString("");
-}
-
 API_EXPORT(bool)
 LLVMPY_IsConstant(LLVMValueRef Val) { return LLVMIsConstant(Val); }
-
-API_EXPORT(bool)
-LLVMPY_TypeIsArray(LLVMTypeRef type)
-{
-    return llvm::unwrap(type)->isArrayTy();
-}
-
-API_EXPORT(bool)
-LLVMPY_TypeIsStruct(LLVMTypeRef type)
-{
-    return llvm::unwrap(type)->isStructTy();
-}
-
-API_EXPORT(bool)
-LLVMPY_TypeIsVector(LLVMTypeRef type)
-{
-    return llvm::unwrap(type)->isVectorTy();
-}
 
 API_EXPORT(LLVMTypeRef)
 LLVMPY_GetElementType(LLVMTypeRef type)
@@ -545,6 +499,16 @@ LLVMPY_GetValueKind(LLVMValueRef Val) { return (int)LLVMGetValueKind(Val); }
 API_EXPORT(LLVMTypeRef)
 LLVMPY_GlobalGetValueType(LLVMValueRef GlobalVal) {
     return LLVMGlobalGetValueType(GlobalVal);
+}
+
+API_EXPORT(LLVMTypeRef)
+LLVMPY_GetAllocatedType(LLVMValueRef Alloca) {
+    return LLVMGetAllocatedType(Alloca);
+}
+
+API_EXPORT(LLVMTypeRef)
+LLVMPY_GetGEPSourceElementType(LLVMValueRef GEP) {
+    return LLVMGetGEPSourceElementType(GEP);
 }
 
 API_EXPORT(void)
