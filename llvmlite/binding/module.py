@@ -44,6 +44,16 @@ def parse_bitcode(bitcode, context=None):
     return mod
 
 
+def parse_dbg_declare(inst):
+    """
+    Parse llvm.dbg.declare and return the results.
+    """
+    return (ValueRef(ffi.lib.LLVMPY_ParseDbgDeclareAddr(inst),
+                     'instruction', inst._parents),
+            ffi.lib.LLVMPY_ParseDbgDeclareVar(inst),
+            ffi.lib.LLVMPY_ParseDbgDeclareType(inst))
+
+
 class ModuleRef(ffi.ObjectRef):
     """
     A reference to a LLVM module.
@@ -347,3 +357,12 @@ ffi.lib.LLVMPY_SetModuleName.argtypes = [ffi.LLVMModuleRef, c_char_p]
 
 ffi.lib.LLVMPY_GetModuleSourceFileName.argtypes = [ffi.LLVMModuleRef]
 ffi.lib.LLVMPY_GetModuleSourceFileName.restype = c_char_p
+
+ffi.lib.LLVMPY_ParseDbgDeclareAddr.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_ParseDbgDeclareAddr.restype = ffi.LLVMValueRef
+
+ffi.lib.LLVMPY_ParseDbgDeclareVar.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_ParseDbgDeclareVar.restype = c_char_p
+
+ffi.lib.LLVMPY_ParseDbgDeclareType.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_ParseDbgDeclareType.restype = c_char_p
