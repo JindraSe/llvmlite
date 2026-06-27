@@ -1,4 +1,6 @@
 #include "llvm/IR/Module.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "core.h"
 #include "llvm-c/Analysis.h"
 #include "llvm-c/Core.h"
@@ -122,6 +124,53 @@ LLVMPY_GetModuleName(LLVMModuleRef M) {
 API_EXPORT(void)
 LLVMPY_SetModuleName(LLVMModuleRef M, const char *Name) {
     llvm::unwrap(M)->setModuleIdentifier(Name);
+}
+
+API_EXPORT(LLVMValueRef)
+LLVMPY_ParseDbgDeclareAddr(LLVMValueRef I)
+{
+    using namespace llvm;
+    if (auto *DD = dyn_cast<DbgDeclareInst>(llvm::unwrap<Value>(I))) {
+        return wrap(DD->getAddress());
+    }
+    if (auto *DD = dyn_cast<DbgValueInst>(llvm::unwrap<Value>(I))) {
+        return wrap(DD->getValue());
+    }
+    return nullptr;
+}
+
+
+API_EXPORT(const char *)
+LLVMPY_ParseDbgDeclareVar(LLVMValueRef I)
+{
+    // Note: getName() returns a StringRef into the temporary returned by
+    // .str(); that temporary is destroyed when this function returns, so
+    // its c_str() must be copied (via LLVMPY_CreateString, like
+    // LLVMPY_GetTypeName does) rather than returned directly -- otherwise
+    // the caller gets a dangling pointer into freed memory.
+    using namespace llvm;
+    if (auto *DD = dyn_cast<DbgDeclareInst>(llvm::unwrap<Value>(I))) {
+        return LLVMPY_CreateString(DD->getVariable()->getName().str().c_str());
+    }
+    if (auto *DD = dyn_cast<DbgValueInst>(llvm::unwrap<Value>(I))) {
+        return LLVMPY_CreateString(DD->getVariable()->getName().str().c_str());
+    }
+    return LLVMPY_CreateString("");
+}
+
+API_EXPORT(const char *)
+LLVMPY_ParseDbgDeclareType(LLVMValueRef I)
+{
+    // See LLVMPY_ParseDbgDeclareVar: must copy via LLVMPY_CreateString to
+    // avoid returning a pointer into an already-destroyed temporary.
+    using namespace llvm;
+    if (auto *DD = dyn_cast<DbgDeclareInst>(llvm::unwrap<Value>(I))) {
+        return LLVMPY_CreateString(DD->getVariable()->getType()->getName().str().c_str());
+    }
+    if (auto *DD = dyn_cast<DbgValueInst>(llvm::unwrap<Value>(I))) {
+        return LLVMPY_CreateString(DD->getVariable()->getType()->getName().str().c_str());
+    }
+    return LLVMPY_CreateString("");
 }
 
 API_EXPORT(LLVMValueRef)
